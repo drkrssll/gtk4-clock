@@ -9,14 +9,19 @@ use gtk4::{
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 
 const STYLE: &str = "
+window {
+    background-color: transparent;
+}
+
 #clock_label {
-    font-size: 42px;
+    font-size: 34px;
     font-family: feather;
     font-family: Iosevka;
     background-color: #000000;
     color: #FFFFFF;
     padding: 10px;
     border: 2px solid black;
+    border-radius: 20px;
 }
 ";
 
@@ -35,19 +40,19 @@ fn main() -> ExitCode {
 }
 
 fn build_ui(app: &Application) {
-    let clock_label = Label::new(None);
-    clock_label.set_widget_name("clock_label");
+    let clock = Label::new(None);
+    clock.set_widget_name("clock_label");
 
-    handle_time(&clock_label);
+    handle_time(&clock);
 
     let window = ApplicationWindow::builder()
         .application(app)
         .title("GTK4 Clock")
-        .default_width(230)
-        .default_height(90)
+        .default_width(180)
+        .default_height(75)
         .build();
 
-    window.set_child(Some(&clock_label));
+    window.set_child(Some(&clock));
     window.init_layer_shell();
 
     window.set_layer(Layer::Overlay);
@@ -75,7 +80,7 @@ fn handle_time(clock_label: &Label) {
     let current_time = Local::now();
 
     let formatted_time = format!(
-        "<span foreground='#FFFFFF' size='large'>{}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
+        "<span background='#000000' foreground='#FFFFFF' size='large'>{}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
         current_time.format("%I:%M").to_string(),
         current_time.format("%p").to_string()
     );

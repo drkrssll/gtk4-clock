@@ -1,5 +1,5 @@
 # Clock Widget
-![Screenshot](screenshot.jpg)
+![Screenshot](screenshot_1.jpg)
 
 Written in Rust using GTK4, this widget was an attempt to recreate what can be accomplished using [Eww](https://github.com/elkowar/eww).
 
