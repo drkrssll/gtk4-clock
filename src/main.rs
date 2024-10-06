@@ -1,18 +1,17 @@
 use std::{
-    cell::RefCell,
     env,
     io::{BufRead, BufReader, Write},
     os::unix::net::UnixStream,
-    rc::Rc,
-    sync::mpsc::{self, Sender},
+    sync::mpsc::{channel, Sender},
     thread,
     time::Duration,
 };
 
 use chrono::Local;
+use gio::glib::{clone::Downgrade, timeout_add_local};
 use gtk4::{
     gdk::Display,
-    glib::{idle_add_local, timeout_add_seconds_local, ExitCode},
+    glib::{timeout_add_seconds_local, ExitCode},
     prelude::{ApplicationExt, ApplicationExtManual, GtkWindowExt, WidgetExt},
     style_context_add_provider_for_display, Application, ApplicationWindow, CssProvider, Label,
     STYLE_PROVIDER_PRIORITY_APPLICATION,
@@ -36,113 +35,102 @@ window {
 }
 ";
 
-enum WLDisplay {}
-
 const SOCKET_PATH: &str = "/run/user/1000/hypr/0f594732b063a90d44df8c5d402d658f27471dfe_1728240250_31247147/.socket2.sock";
 
-impl WLDisplay {
-    fn detect_wayland() -> bool {
-        let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
-        let wayland_display = env::var("WAYLAND_DISPLAY").unwrap_or_default();
+fn detect_wayland() -> bool {
+    let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    let wayland_display = env::var("WAYLAND_DISPLAY").unwrap_or_default();
 
-        session_type.contains("wayland")
-            || (!wayland_display.is_empty() && !session_type.contains("x11"))
-    }
+    session_type.contains("wayland")
+        || (!wayland_display.is_empty() && !session_type.contains("x11"))
+}
 
-    fn event_listener(window_sender: mpsc::Sender<bool>) {
-        thread::spawn(move || {
-            if let Ok(mut stream) = UnixStream::connect(SOCKET_PATH) {
-                let _ = stream.write_all(b"subscribewindow\n");
+fn event_listener(window_sender: Sender<bool>) {
+    thread::spawn(move || {
+        if let Ok(mut stream) = UnixStream::connect(SOCKET_PATH) {
+            let _ = stream.write_all(b"subscribewindow\n");
 
-                let reader = BufReader::new(stream);
-                for line in reader.lines() {
-                    if let Ok(event) = line {
-                        println!("Received event: {}", event);
-
-                        if event.contains("fullscreen>>1") {
-                            let _ = window_sender.send(true);
-                        } else if event.contains("fullscreen>>0") {
-                            let _ = window_sender.send(false);
-                        }
-
-                        std::thread::sleep(Duration::from_millis(100));
+            let reader = BufReader::new(stream);
+            for line in reader.lines() {
+                if let Ok(event) = line {
+                    if event.contains("fullscreen>>1") {
+                        let _ = window_sender.send(true);
+                    } else if event.contains("fullscreen>>0") {
+                        let _ = window_sender.send(false);
                     }
                 }
             }
-        });
-    }
+        }
+    });
 }
 
 fn main() -> ExitCode {
-    let _ = gtk4::init();
-
-    load_css();
-
-    let app = Application::builder()
+    let application = Application::builder()
         .application_id("clock.widget")
         .build();
 
-    app.connect_activate(build_ui);
-
-    app.run()
+    application.connect_activate(build_ui);
+    application.run()
 }
 
 fn build_ui(app: &Application) {
     let clock = Label::new(None);
     clock.set_widget_name("clock_label");
 
-    handle_time(&clock);
-
     let window = ApplicationWindow::builder()
         .application(app)
         .title("GTK4 Clock")
         .default_width(180)
         .default_height(75)
+        .child(&clock)
         .build();
 
     window.set_decorated(false);
     window.set_resizable(false);
 
-    window.set_child(Some(&clock));
+    if detect_wayland() {
+        setup_wayland_window(&window);
+    }
 
-    if WLDisplay::detect_wayland() {
-        window.init_layer_shell();
+    load_css();
+    handle_time(&clock);
 
-        window.set_layer(Layer::Overlay);
-        window.set_margin(Edge::Right, 20);
-        window.set_margin(Edge::Top, 20);
+    window.present();
+}
 
-        let anchors = [
-            (Edge::Left, false),
-            (Edge::Right, true),
-            (Edge::Top, true),
-            (Edge::Bottom, false),
-        ];
+fn setup_wayland_window(window: &ApplicationWindow) {
+    window.init_layer_shell();
+    window.set_layer(Layer::Overlay);
+    window.set_margin(Edge::Right, 20);
+    window.set_margin(Edge::Top, 20);
 
-        for (anchor, state) in anchors {
-            window.set_anchor(anchor, state);
-        }
+    let anchors = [
+        (Edge::Left, false),
+        (Edge::Right, true),
+        (Edge::Top, true),
+        (Edge::Bottom, false),
+    ];
 
-        window.present();
+    for (anchor, state) in anchors {
+        window.set_anchor(anchor, state);
+    }
 
-        let (window_sender, window_receiver) = mpsc::channel::<bool>();
+    let (window_sender, window_receiver) = channel::<bool>();
+    event_listener(window_sender);
 
-        WLDisplay::event_listener(window_sender);
-
-        let window = Rc::new(RefCell::new(window.clone()));
-
-        idle_add_local(move || {
-            if let Ok(is_fullscreen) = window_receiver.try_recv() {
-                let window = window.borrow();
-                if !is_fullscreen {
-                    window.show()
+    let window_weak = window.downgrade();
+    timeout_add_local(Duration::from_millis(100), move || {
+        if let Ok(is_fullscreen) = window_receiver.try_recv() {
+            if let Some(window) = window_weak.upgrade() {
+                if is_fullscreen {
+                    window.hide();
                 } else {
-                    window.hide()
+                    window.show();
                 }
             }
-            gtk4::glib::ControlFlow::Continue
-        });
-    }
+        }
+        gio::glib::ControlFlow::Continue
+    });
 }
 
 fn handle_time(clock_label: &Label) {
@@ -176,9 +164,11 @@ fn load_css() {
     let provider = CssProvider::new();
     provider.load_from_data(STYLE);
 
-    style_context_add_provider_for_display(
-        &Display::default().expect("Could not connect to a display."),
-        &provider,
-        STYLE_PROVIDER_PRIORITY_APPLICATION,
-    )
+    if let Some(display) = Display::default() {
+        style_context_add_provider_for_display(
+            &display,
+            &provider,
+            STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
 }
