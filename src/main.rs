@@ -80,8 +80,6 @@ fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .title("GTK4 Clock")
-        .default_width(180)
-        .default_height(75)
         .child(&clock)
         .build();
 
@@ -134,29 +132,36 @@ fn setup_wayland_window(window: &ApplicationWindow) {
 }
 
 fn handle_time(clock_label: &Label) {
-    let current_time = Local::now();
+    let clock_clone = clock_label.clone();
 
-    let formatted_time = format!(
-        "<span background='#000000' foreground='#FFFFFF' size='large'>{}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
-        current_time.format("%I:%M").to_string(),
-        current_time.format("%p").to_string()
+    let current_time = Local::now();
+    let initial_text = format!(
+        "<span background='#000000' foreground='#FFFFFF' size='large'>{}</span>\n<span foreground='#fabbc2' weight='bold' size='small'>{}</span><span foreground='#FF0110' weight='bold' size='small'>{}</span>",
+        current_time.format("%A").to_string(),
+        current_time.format("%b ").to_string(),
+        current_time.format("%d").to_string(),
     );
 
-    clock_label.set_markup(&formatted_time);
+    clock_clone.set_markup(&initial_text);
 
-    let clock_label_clone = clock_label.clone();
     timeout_add_seconds_local(1, move || {
-        let current_time = Local::now();
+        let clock_clone = clock_clone.clone();
+        timeout_add_seconds_local(1, move || {
+            let current_time = Local::now();
 
-        let formatted_time = format!(
-            "<span foreground='#FFFFFF' size='large'>{}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
-            current_time.format("%I:%M").to_string(),
-            current_time.format("%p").to_string()
-        );
+            let formatted_time = format!(
+                "<span foreground='#FFFFFF' size='large'>{}</span>\n<span foreground='#FFFFFF' size='large'>  {}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
+                current_time.format("%I").to_string(),
+                current_time.format("%M").to_string(),
+                current_time.format("%p").to_string()
+            );
 
-        clock_label_clone.set_markup(&formatted_time);
+            clock_clone.set_markup(&formatted_time);
 
-        gtk4::glib::ControlFlow::Continue
+            gio::glib::ControlFlow::Continue
+        });
+
+        gio::glib::ControlFlow::Break
     });
 }
 
