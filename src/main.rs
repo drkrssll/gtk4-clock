@@ -139,24 +139,24 @@ fn handle_time(clock_label: &Label) {
 
     let current_time = Local::now();
     let initial_text = format!(
-        "<span background='#000000' foreground='#FFFFFF' size='large'>{}</span>\n<span foreground='#fabbc2' weight='bold' size='small'>{}</span><span foreground='#FF0110' weight='bold' size='small'>{}</span>",
+        "<span background='#000000' foreground='#FFFFFF' size='large'>{}</span>\n<span foreground='#fabbc2' size='small'>{}   </span><span foreground='#FF0110' weight='bold' size='small'>{}</span>",
         current_time.format("%A").to_string(),
-        current_time.format("%b ").to_string(),
+        current_time.format("%b").to_string(),
         current_time.format("%d").to_string(),
     );
 
     clock_clone.set_markup(&initial_text);
 
-    timeout_add_seconds_local(1, move || {
+    timeout_add_seconds_local(2, move || {
         let clock_clone = clock_clone.clone();
         timeout_add_seconds_local(1, move || {
             let current_time = Local::now();
 
             let formatted_time = format!(
-                "<span foreground='#FFFFFF' size='large'>{}</span>\n<span foreground='#FFFFFF' size='large'>  {}</span> <span foreground='#FF0110' weight='bold' size='small'>{}</span>",
+                "<span foreground='#FFFFFF' size='large'>{}</span><span foreground='#FF0110' weight='bold' size='small'>  {}</span>\n<span foreground='#FFFFFF' size='large'> {}</span>",
                 current_time.format("%I").to_string(),
+                current_time.format("%p").to_string(),
                 current_time.format("%M").to_string(),
-                current_time.format("%p").to_string()
             );
 
             clock_clone.set_markup(&formatted_time);
