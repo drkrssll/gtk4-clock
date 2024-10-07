@@ -35,8 +35,6 @@ window {
 }
 ";
 
-const SOCKET_PATH: &str = "/run/user/1000/hypr/0f594732b063a90d44df8c5d402d658f27471dfe_1728240250_31247147/.socket2.sock";
-
 fn detect_wayland() -> bool {
     let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
     let wayland_display = env::var("WAYLAND_DISPLAY").unwrap_or_default();
@@ -46,8 +44,13 @@ fn detect_wayland() -> bool {
 }
 
 fn event_listener(window_sender: Sender<bool>) {
+    let instance_signature = env::var("HYPRLAND_INSTANCE_SIGNATURE")
+        .expect("HYPRLAND_INSTANCE_SIGNATURE not found. Is Hyprland running?");
+
+    let socket_path = format!("/run/user/1000/hypr/{}/.socket2.sock", instance_signature);
+
     thread::spawn(move || {
-        if let Ok(mut stream) = UnixStream::connect(SOCKET_PATH) {
+        if let Ok(mut stream) = UnixStream::connect(&socket_path) {
             let _ = stream.write_all(b"subscribewindow\n");
 
             let reader = BufReader::new(stream);
