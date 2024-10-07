@@ -1,5 +1,5 @@
 # Clock Widget
-![Gif](widget.gif)
+![Gif](example.gif)
 
 Written in Rust using GTK4, this widget was an attempt to recreate what can be accomplished using [Eww](https://github.com/elkowar/eww).
 
